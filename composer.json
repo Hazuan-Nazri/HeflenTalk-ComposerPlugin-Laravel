@@ -1,0 +1,39 @@
+{
+    "name": "helfentalk/laravel-plugin",
+    "description": "HeflenTalk Connect plugin for Laravel tenants — securely expose role-scoped data to HeflenTalk over a signed internal endpoint. Data never leaves your server.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["helfentalk", "chatbot", "connect", "laravel"],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "illuminate/http": "^11.0|^12.0|^13.0",
+        "illuminate/database": "^11.0|^12.0|^13.0",
+        "illuminate/routing": "^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "HelfenTalk\\Connect\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "HelfenTalk\\Connect\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "HelfenTalk\\Connect\\HelfenTalkConnectServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
