@@ -21,11 +21,6 @@ class QueryRunner
      */
     public function run(array $userContext, string $scope): array
     {
-        $userId = $userContext['user_id'] ?? null;
-        $teamId = $userContext['team_id'] ?? ($userContext['claims']['team_id'] ?? null);
-
-        $userColumn = (string) config('helfentalk.user_column', 'user_id');
-        $teamColumn = (string) config('helfentalk.team_column', 'team_id');
         $maxRows = (int) config('helfentalk.max_rows', 25);
         $connection = config('helfentalk.connection');
 
@@ -41,23 +36,11 @@ class QueryRunner
             $columns = $this->schema->columns($table);
             $query = DB::connection($connection)->table($table);
 
-            if ($scope === 'own' && $userId !== null && in_array($userColumn, $columns, true))
+            // If the table cannot be scoped and the scope is not 'all', skip it
+            // entirely rather than leak unscoped rows.
+            if (! ScopeFilter::apply($query, $scope, $userContext, $columns))
             {
-                $query->where($userColumn, $userId);
-            }
-            elseif ($scope === 'team' && $teamId !== null && in_array($teamColumn, $columns, true))
-            {
-                $query->where($teamColumn, $teamId);
-            }
-            elseif ($scope === 'team' && $userId !== null && in_array($userColumn, $columns, true))
-            {
-                // No team column to scope by — fall back to the user's own rows.
-                $query->where($userColumn, $userId);
-            }
-            elseif ($scope !== 'all' && $userId !== null && in_array($userColumn, $columns, true))
-            {
-                // Unknown scope defaults to own rows — never leak everything.
-                $query->where($userColumn, $userId);
+                continue;
             }
 
             $rows = $query->limit($maxRows)->get()

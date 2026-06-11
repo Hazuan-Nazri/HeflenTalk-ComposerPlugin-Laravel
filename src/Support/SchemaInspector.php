@@ -15,11 +15,37 @@ class SchemaInspector
     }
 
     /**
+     * The tables the plugin may touch. Resolves the 'all' wildcard to every
+     * table in the database; otherwise returns the configured whitelist.
+     *
      * @return array<int, string>
      */
     public function allowedTables(): array
     {
-        return array_values((array) config('helfentalk.allowed_tables', []));
+        $configured = config('helfentalk.allowed_tables', []);
+
+        if ($configured === 'all' || $configured === ['all'])
+        {
+            return $this->allTables();
+        }
+
+        return array_values((array) $configured);
+    }
+
+    /**
+     * Whether a given table is within the allowed set.
+     */
+    public function isAllowed(string $table): bool
+    {
+        return in_array($table, $this->allowedTables(), true);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function allTables(): array
+    {
+        return Schema::connection($this->connection)->getTableListing();
     }
 
     public function tableExists(string $table): bool
