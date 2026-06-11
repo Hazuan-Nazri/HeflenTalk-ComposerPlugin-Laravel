@@ -123,11 +123,86 @@ Content-Type: application/json
   "scope": "own", "user_id": 123 }
 ```
 
-## Data actions (read + write)
+## Actions menu — let the chatbot run YOUR controllers (recommended)
 
-When you map models and grant capabilities, HeflenTalk can let the chatbot
-**find, count, create, edit, change status and delete** records — all within the
-limits you set. Two more signed endpoints power this (same HMAC contract):
+The cleanest way to let the chatbot *do* things is to point it at your own
+controller methods. You list the actions it may perform; each one runs **through
+your controller**, so your validation, authorization (policies/gates), `if/else`
+logic and approval flows all execute exactly as they do for a normal web request.
+The chatbot can only ever do what is on the list, and can never bypass your rules.
+
+### How it decides which controller to run
+
+You write a small **menu** in config — a plain-English label for each action and
+the controller method it maps to. The AI reads the *labels* (never your code) and
+picks the one that matches what the user asked. Anything not on the menu simply
+does not exist to the bot.
+
+```php
+// config/helfentalk.php
+
+// So the plugin can run your controllers AS the person chatting (auth()->user(),
+// policies and gates work normally):
+'auth' => [
+    'model' => \App\Models\User::class,
+    'key'   => 'id',   // column matched against the user-context user_id
+],
+
+'actions' => [
+
+    'change_worker_status' => [
+        'label'      => 'Change a worker’s status',
+        'controller' => [\App\Http\Controllers\WorkerController::class, 'update'],
+        'inputs'     => [
+            // Use your REAL field names — the ones your controller/validation expect.
+            'worker' => 'The worker ID to update',
+            'status' => 'New status: "active" or "inactive"',
+        ],
+        'confirm'  => true,            // preview + ask before the controller runs
+        'roles'    => ['admin', 'manager'],   // optional allow-list
+        'bindings' => ['worker' => \App\Models\Worker::class], // route-model binding
+    ],
+
+],
+```
+
+That's the whole mapping. With this, *"make Ahmad inactive"* becomes: the bot looks
+up Ahmad's id, matches the **"Change a worker's status"** action, shows you a preview
+(*"set worker 1 to inactive — confirm?"*), and only on your **yes** calls
+`WorkerController@update` — where your validation and approval run for real.
+
+### Three rules that make it work
+
+1. **Point at methods that DO the work and RETURN data** — `update`, `store`,
+   `destroy` — not the form-rendering `edit` / `create` / `show` (those return a
+   page and write nothing).
+2. **Declare inputs with your real field/column names.** The AI fills inputs from
+   the conversation and sends exactly those keys. If your column is
+   `employment_state`, name the input `employment_state` (not `status`) — otherwise
+   your controller never sees the value and nothing changes.
+3. **Put enforceable logic where the controller runs it** — in the controller, a
+   Form Request, a Policy/Gate, or a model observer. If a rule lives somewhere the
+   `update`/`store`/`destroy` call doesn't reach, it won't fire. (Approval that
+   currently lives only in a *different* controller action should move into the
+   model/observer, or just leave that action off the menu.)
+
+### What the bot returns to the user
+
+- **Validation fails** (e.g. status not `active`/`inactive`) → the bot relays the
+  exact validation message; nothing is written.
+- **Policy/authorization denies** → the bot says you're not allowed; nothing is written.
+- **Not on the menu / typo'd controller** → the bot can't do it (safe failure); it
+  never guesses a different action.
+
+Every run and preview is recorded in the audit log.
+
+## Data actions via generic table CRUD (alternative)
+
+If you'd rather not wire controllers, you can instead map models and grant
+capabilities, and HeflenTalk can let the chatbot **find, count, create, edit,
+change status and delete** records through the model layer — all within the
+limits you set. Two more signed endpoints power both this and the actions menu
+(same HMAC contract):
 
 - **`POST /helfentalk/manifest`** — tells HeflenTalk what the user's role may do
   (tables, capabilities, writable columns), so it only ever offers permitted
