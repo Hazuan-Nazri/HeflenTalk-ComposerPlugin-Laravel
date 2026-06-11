@@ -233,6 +233,59 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | User-context token endpoint  (GET {prefix}/token)
+    |--------------------------------------------------------------------------
+    |
+    | Lets your chat UI obtain a signed user-context JWT WITHOUT writing any
+    | signing code. While a user is logged in, your front-end calls
+    | GET /helfentalk/token (guarded by YOUR auth) and receives:
+    |
+    |   { "token": "<jwt>", "expires_in": 900 }
+    |
+    | It then sends that token to HeflenTalk's chat API as
+    | user_context.token. The JWT is HS256-signed with your Connect secret
+    | (HELFENTALK_KEY) and carries: user_id (from auth.key), name, role and
+    | (optionally) department — exactly what HeflenTalk verifies.
+    |
+    | This route is NOT HMAC-protected; it is protected by 'middleware' below,
+    | which must authenticate YOUR dashboard user.
+    |
+    */
+
+    'token' => [
+
+        // enabled — OPTIONAL (default true). Set false to not register the
+        // /token route at all (e.g. if you prefer to sign the JWT yourself).
+        'enabled' => (bool) env('HELFENTALK_TOKEN_ENABLED', true),
+
+        // middleware — REQUIRED to be correct for YOUR app. The auth middleware
+        // that identifies the logged-in user on this route. This is YOUR app's
+        // auth, NOT the HMAC used by connect/manifest/action. Common choices:
+        //   ['auth:sanctum']  — SPA / token-based dashboards (Sanctum)
+        //   ['auth']          — session-based (web guard) dashboards
+        'middleware' => ['auth:sanctum'],
+
+        // ttl — OPTIONAL (default 900s = 15 min). How long an issued token is
+        // valid. Keep it short; the UI fetches a fresh one when it expires.
+        'ttl' => (int) env('HELFENTALK_TOKEN_TTL', 900),
+
+        // role_field — OPTIONAL. The user attribute/column holding the role used
+        // by capabilities & role_rules. Leave null to auto-detect: Spatie's
+        // getRoleNames()->first(), else a plain 'role' attribute.
+        'role_field' => null,
+
+        // name_field — OPTIONAL. The user attribute holding the display name.
+        // Leave null to auto-detect 'name' then 'full_name'.
+        'name_field' => null,
+
+        // department_field — OPTIONAL. The user attribute holding a department,
+        // if you want it in the token. Leave null to omit the department claim.
+        'department_field' => null,
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Models (required for WRITE actions)
     |--------------------------------------------------------------------------
     |

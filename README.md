@@ -100,8 +100,57 @@ HeflenTalk-be  ──(HMAC-signed POST)──▶  /helfentalk/connect
 ```
 
 The signature covers `"{timestamp}.{rawBody}"` with HMAC-SHA256 using your
-`HELFENTALK_KEY`. The same secret is what you use to sign the **user-context JWT**
-on your side, so the user identity HeflenTalk forwards is trustworthy.
+`HELFENTALK_KEY`. The same secret signs the **user-context JWT** that identifies
+who is chatting — and the plugin can mint that JWT for you (see below), so you
+write no signing code.
+
+## User-context token — zero signing code (recommended)
+
+Your chat UI must tell HeflenTalk *who* is chatting, as a short-lived JWT signed
+with your Connect secret. Instead of signing it yourself, the plugin exposes:
+
+```
+GET /helfentalk/token          (guarded by YOUR auth, not HMAC)
+→ { "token": "<jwt>", "expires_in": 900 }
+```
+
+Your front-end calls it while the user is logged in, then sends the token to
+HeflenTalk's chat API as `user_context.token`. The JWT carries `user_id` (from
+`auth.key`), `name`, `role` and optionally `department` — HS256-signed with
+`HELFENTALK_KEY`.
+
+```php
+// config/helfentalk.php
+'token' => [
+    'enabled'    => true,
+    // YOUR auth guard for this route (NOT the HMAC used by connect/action):
+    'middleware' => ['auth:sanctum'],   // or ['auth'] for session dashboards
+    'ttl'        => 900,                 // seconds
+    // role auto-detects Spatie getRoleNames() or a 'role' attribute;
+    // set these only to override:
+    'role_field' => null,
+    'name_field' => null,
+    'department_field' => null,
+],
+```
+
+Front-end wiring (the whole integration):
+
+```js
+// 1. get a fresh user-context token from your own app
+const { token } = await fetch('/helfentalk/token', { credentials: 'include' })
+    .then(r => r.json());
+
+// 2. send the chat message to HeflenTalk with that token
+await fetch('https://heflentalk.com/api/widget/chat', {
+    method: 'POST',
+    headers: { 'X-Bot-Key': '<bot public key>', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, user_context: { token } }),
+});
+```
+
+Prefer to sign it yourself? Set `'enabled' => false` and issue an HS256 JWT with
+the same claims and secret.
 
 ### Request (from HeflenTalk → plugin)
 
