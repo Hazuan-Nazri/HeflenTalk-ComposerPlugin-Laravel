@@ -42,6 +42,15 @@ class ActionDispatcherTest extends TestCase
                 'roles' => ['admin'],
                 'bindings' => ['worker' => AccWorker::class],
             ],
+            'list_workers' => [
+                'label' => 'List or search workers',
+                'controller' => [AccWorkerController::class, 'index'],
+                'read' => true,
+                'view_route' => '/workers/{id}',
+                'entity' => 'workers',
+                'inputs' => ['status' => 'Optional status filter'],
+                'roles' => ['admin'],
+            ],
         ]);
     }
 
@@ -138,6 +147,39 @@ class ActionDispatcherTest extends TestCase
         $this->assertSame('active', AccWorker::find(1)->status);
     }
 
+    public function test_read_action_lists_through_controller_with_view_urls(): void
+    {
+        AccWorker::create(['id' => 2, 'name' => 'Siti', 'status' => 'inactive']);
+
+        $result = $this->dispatcher()->dispatch(
+            ['name' => 'list_workers', 'values' => []],
+            $this->admin,
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertTrue($result['read'], 'a read action is tagged so the app renders a table');
+        $this->assertArrayNotHasKey('preview', $result, 'reads run immediately, never preview');
+        $this->assertSame('workers', $result['entity']);
+        $this->assertCount(2, $result['rows']);
+        $this->assertSame('/workers/1', $result['rows'][0]['view_url']);
+        $this->assertSame(2, $result['total'], 'the controller paginator total is surfaced');
+    }
+
+    public function test_read_action_passes_optional_filters_to_the_controller(): void
+    {
+        AccWorker::create(['id' => 2, 'name' => 'Siti', 'status' => 'inactive']);
+
+        $result = $this->dispatcher()->dispatch(
+            ['name' => 'list_workers', 'values' => ['status' => 'inactive']],
+            $this->admin,
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertCount(1, $result['rows']);
+        $this->assertSame('Siti', $result['rows'][0]['name']);
+        $this->assertSame('/workers/2', $result['rows'][0]['view_url']);
+    }
+
     public function test_undeclared_action_is_refused(): void
     {
         $result = $this->dispatcher()->dispatch(
@@ -185,5 +227,19 @@ class AccWorkerController
         $worker->update(['status' => $data['status'], 'updated_by' => auth()->id()]);
 
         return ['id' => $worker->id, 'status' => $worker->status, 'by' => auth()->id()];
+    }
+
+    public function index(Request $request)
+    {
+        $query = AccWorker::query();
+
+        if ($request->filled('status'))
+        {
+            $query->where('status', $request->input('status'));
+        }
+
+        $rows = $query->get()->map(fn (AccWorker $w) => ['id' => $w->id, 'name' => $w->name, 'status' => $w->status])->all();
+
+        return response()->json(['status' => 'success', 'data' => $rows, 'meta' => ['total' => count($rows)]]);
     }
 }

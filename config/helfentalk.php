@@ -188,6 +188,34 @@ return [
         //     ],
         // ],
 
+        /*
+        | A READ action — list / search records THROUGH your controller. Set
+        | 'read' => true: the action runs your index/list method (so soft-deletes,
+        | company/tenant scopes, authorization and your API Resource all apply),
+        | runs immediately (no confirm), and its returned list is shown to the user
+        | as an interactive, clickable table. This is the recommended way to let the
+        | bot list data — it never touches the database directly.
+        |
+        |   'read'       => true  — marks this as a list/search action.
+        |   'view_route' => deep-link template; {braces} are filled from each row's
+        |                    own fields, so clicking a row opens its page.
+        |   'entity'     => optional label for the table header (e.g. 'workers').
+        |   'inputs'     => OPTIONAL filters your index() understands (status, search…);
+        |                    the bot may omit them to list everything.
+        |   Your index() should RETURN JSON (an API resource collection, i.e.
+        |   { "data": [ ... ] }, or a bare list). Each row needs the field your
+        |   view_route references (e.g. id).
+        */
+        // 'list_workers' => [
+        //     'label'      => 'List or search workers (by status, etc.)',
+        //     'controller' => [\App\Http\Controllers\WorkerController::class, 'index'],
+        //     'read'       => true,
+        //     'view_route' => '/workers/{id}',
+        //     'entity'     => 'workers',
+        //     'inputs'     => ['status' => 'Optional filter: active / inactive / expired'],
+        //     'roles'      => ['admin', 'manager'],
+        // ],
+
     ],
 
     /*

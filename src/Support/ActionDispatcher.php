@@ -76,9 +76,15 @@ class ActionDispatcher
         // Keep only inputs the action declares — the model can't smuggle extras.
         $inputs = $this->declaredInputs($definition, $values);
 
+        // A read action lists/searches records through the client's own
+        // controller (e.g. WorkerController@index) — it runs immediately (no
+        // confirm) and its result is returned as a structured, clickable table.
+        $isRead = (bool) ($definition['read'] ?? false);
+
         // confirm-first: never run the controller on a preview. Show the user the
-        // exact action and inputs; only a confirmed call actually executes.
-        $needsConfirm = (bool) ($definition['confirm'] ?? true);
+        // exact action and inputs; only a confirmed call actually executes. Reads
+        // never preview (they change nothing).
+        $needsConfirm = ! $isRead && (bool) ($definition['confirm'] ?? true);
 
         if ($needsConfirm && ! $confirm)
         {
@@ -128,7 +134,104 @@ class ActionDispatcher
 
         $this->audit($name, $userContext, $role, $inputs, true);
 
+        // A read action returns its controller's list as structured rows (each
+        // tagged with a view_url) so the app renders an interactive, clickable
+        // table — the same shape a generic query would produce, but routed fully
+        // through the controller (auth, scopes, soft-deletes and the API resource
+        // all applied).
+        if ($isRead)
+        {
+            $rows = $this->withViewUrls(
+                (string) ($definition['view_route'] ?? ''),
+                $this->extractRows($result),
+            );
+
+            return [
+                'ok' => true,
+                'action' => $name,
+                'read' => true,
+                'entity' => (string) ($definition['entity'] ?? $name),
+                'rows' => $rows,
+                'count' => count($rows),
+                // The controller's own total (paginator meta) — the AUTHORITATIVE
+                // count, already scoped and with soft-deletes excluded. Null when
+                // the response isn't paginated.
+                'total' => $this->extractTotal($result),
+            ];
+        }
+
         return ['ok' => true, 'action' => $name, 'result' => $result];
+    }
+
+    /**
+     * Pull the list of records out of whatever the controller returned —
+     * unwrapping a Laravel API-resource collection envelope ({ data: [...] }) or
+     * a bare list. Non-list responses yield no rows (handled as a plain result).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function extractRows(mixed $result): array
+    {
+        $data = is_array($result) ? ($result['data'] ?? $result) : $result;
+
+        if (is_array($data) && isset($data['data']) && is_array($data['data']))
+        {
+            $data = $data['data'];
+        }
+
+        if (is_array($data) && array_is_list($data))
+        {
+            return array_values(array_filter($data, 'is_array'));
+        }
+
+        return [];
+    }
+
+    /**
+     * Best-effort total from a paginator envelope (meta.total) — the controller's
+     * authoritative count. Null when the response carries no such meta.
+     */
+    protected function extractTotal(mixed $result): ?int
+    {
+        $data = is_array($result) ? ($result['data'] ?? $result) : $result;
+
+        if (is_array($data) && isset($data['meta']['total']) && is_numeric($data['meta']['total']))
+        {
+            return (int) $data['meta']['total'];
+        }
+
+        return null;
+    }
+
+    /**
+     * Attach a `view_url` to each row from the action's route template
+     * (e.g. '/workers/{id}'). Placeholders are filled from the row's own fields;
+     * a row whose template can't be fully resolved is left without a view_url.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    protected function withViewUrls(string $template, array $rows): array
+    {
+        if ($template === '')
+        {
+            return $rows;
+        }
+
+        return array_map(function (array $row) use ($template)
+        {
+            $url = preg_replace_callback('/\{(\w+)\}/', function ($m) use ($row)
+            {
+                return array_key_exists($m[1], $row) ? rawurlencode((string) $row[$m[1]]) : $m[0];
+            }, $template);
+
+            if (! preg_match('/\{\w+\}/', $url))
+            {
+                $row['view_url'] = $url;
+            }
+
+            return $row;
+        }, $rows);
     }
 
     /**

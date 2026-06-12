@@ -113,11 +113,15 @@ class Manifest
                 $inputs[(string) $field] = (string) $description;
             }
 
+            $isRead = (bool) ($definition['read'] ?? false);
+
             $actions[] = [
                 'name' => (string) $name,
                 'label' => (string) ($definition['label'] ?? $name),
                 'inputs' => $inputs,
-                'confirm' => (bool) ($definition['confirm'] ?? true),
+                // Reads run immediately (no preview) and return a list to display.
+                'read' => $isRead,
+                'confirm' => ! $isRead && (bool) ($definition['confirm'] ?? true),
             ];
         }
 
