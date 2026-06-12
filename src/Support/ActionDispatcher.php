@@ -76,10 +76,23 @@ class ActionDispatcher
         // Keep only inputs the action declares — the model can't smuggle extras.
         $inputs = $this->declaredInputs($definition, $values);
 
+        // Fixed params the client always wants forwarded to its controller —
+        // e.g. a larger `per_page` so a read action returns enough rows to fill a
+        // table, or a forced sort. Declared in config (trusted), not model-
+        // supplied, so they're merged in AFTER the smuggle-guard. A value the
+        // model explicitly set still wins, so these act as client-set defaults.
+        $inputs = array_merge($this->fixedParams($definition), $inputs);
+
+        // A count action runs the SAME list controller but returns only the
+        // total — for "how many …?" questions. It surfaces no rows, so the app
+        // shows a plain number, never a table. A count is a kind of read: it runs
+        // immediately and changes nothing.
+        $isCount = (bool) ($definition['count'] ?? false);
+
         // A read action lists/searches records through the client's own
         // controller (e.g. WorkerController@index) — it runs immediately (no
         // confirm) and its result is returned as a structured, clickable table.
-        $isRead = (bool) ($definition['read'] ?? false);
+        $isRead = $isCount || (bool) ($definition['read'] ?? false);
 
         // confirm-first: never run the controller on a preview. Show the user the
         // exact action and inputs; only a confirmed call actually executes. Reads
@@ -133,6 +146,22 @@ class ActionDispatcher
         }
 
         $this->audit($name, $userContext, $role, $inputs, true);
+
+        // A count action returns ONLY the total — no rows — so the app answers a
+        // "how many?" question with a plain number and never renders a table. The
+        // total is the controller's authoritative count (paginator meta), already
+        // scoped with soft-deletes excluded; it falls back to the returned row
+        // count when the response isn't paginated.
+        if ($isCount)
+        {
+            return [
+                'ok' => true,
+                'action' => $name,
+                'count_only' => true,
+                'entity' => (string) ($definition['entity'] ?? $name),
+                'total' => $this->extractTotal($result) ?? count($this->extractRows($result)),
+            ];
+        }
 
         // A read action returns its controller's list as structured rows (each
         // tagged with a view_url) so the app renders an interactive, clickable
@@ -312,6 +341,20 @@ class ActionDispatcher
         }
 
         return array_intersect_key($values, array_flip($declared));
+    }
+
+    /**
+     * Fixed request params the action always forwards to the controller (e.g.
+     * `['per_page' => 50]`). Client-declared, so trusted; merged in as defaults.
+     *
+     * @param  array<string, mixed>  $definition
+     * @return array<string, mixed>
+     */
+    protected function fixedParams(array $definition): array
+    {
+        $params = $definition['params'] ?? [];
+
+        return is_array($params) ? $params : [];
     }
 
     /**

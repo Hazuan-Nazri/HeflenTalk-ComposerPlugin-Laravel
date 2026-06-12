@@ -202,6 +202,10 @@ return [
         |   'entity'     => optional label for the table header (e.g. 'workers').
         |   'inputs'     => OPTIONAL filters your index() understands (status, search…);
         |                    the bot may omit them to list everything.
+        |   'params'     => OPTIONAL fixed request params ALWAYS sent to your
+        |                    controller (the bot can't set or override these). Use it
+        |                    to return enough rows to fill a table, e.g.
+        |                    ['per_page' => 50], or to force a sort.
         |   Your index() should RETURN JSON (an API resource collection, i.e.
         |   { "data": [ ... ] }, or a bare list). Each row needs the field your
         |   view_route references (e.g. id).
@@ -213,6 +217,26 @@ return [
         //     'view_route' => '/workers/{id}',
         //     'entity'     => 'workers',
         //     'inputs'     => ['status' => 'Optional filter: active / inactive / expired'],
+        //     'params'     => ['per_page' => 50],
+        //     'roles'      => ['admin', 'manager'],
+        // ],
+
+        /*
+        | A COUNT action — answer "how many …?" with just a NUMBER, no table. Set
+        | 'count' => true. It runs the SAME list controller (index), but the plugin
+        | returns only the paginator total (scoped, soft-deletes excluded) and no
+        | rows — so the bot says "You have 12 workers." instead of listing them.
+        | Pair it with your read action: the bot picks count for "how many", and the
+        | read action when the user asks to see/list them. Keep 'params' small
+        | (e.g. ['per_page' => 1]) — the total is the full count regardless.
+        */
+        // 'count_workers' => [
+        //     'label'      => 'Count workers (returns only the number, not a list)',
+        //     'controller' => [\App\Http\Controllers\WorkerController::class, 'index'],
+        //     'count'      => true,
+        //     'entity'     => 'workers',
+        //     'inputs'     => ['status' => 'Optional filter: active / inactive / expired'],
+        //     'params'     => ['per_page' => 1],
         //     'roles'      => ['admin', 'manager'],
         // ],
 

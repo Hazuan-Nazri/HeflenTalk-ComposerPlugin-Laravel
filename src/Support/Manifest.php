@@ -113,7 +113,9 @@ class Manifest
                 $inputs[(string) $field] = (string) $description;
             }
 
-            $isRead = (bool) ($definition['read'] ?? false);
+            $isCount = (bool) ($definition['count'] ?? false);
+            // A count is a read (runs immediately, returns only a number).
+            $isRead = $isCount || (bool) ($definition['read'] ?? false);
 
             $actions[] = [
                 'name' => (string) $name,
@@ -121,6 +123,8 @@ class Manifest
                 'inputs' => $inputs,
                 // Reads run immediately (no preview) and return a list to display.
                 'read' => $isRead,
+                // A count read returns only a total — the app shows a number, not a table.
+                'count' => $isCount,
                 'confirm' => ! $isRead && (bool) ($definition['confirm'] ?? true),
             ];
         }

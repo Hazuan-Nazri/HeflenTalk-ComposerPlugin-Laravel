@@ -49,6 +49,15 @@ class ActionDispatcherTest extends TestCase
                 'view_route' => '/workers/{id}',
                 'entity' => 'workers',
                 'inputs' => ['status' => 'Optional status filter'],
+                'params' => ['per_page' => 50],
+                'roles' => ['admin'],
+            ],
+            'count_workers' => [
+                'label' => 'Count workers',
+                'controller' => [AccWorkerController::class, 'index'],
+                'count' => true,
+                'entity' => 'workers',
+                'inputs' => ['status' => 'Optional status filter'],
                 'roles' => ['admin'],
             ],
         ]);
@@ -180,6 +189,52 @@ class ActionDispatcherTest extends TestCase
         $this->assertSame('/workers/2', $result['rows'][0]['view_url']);
     }
 
+    public function test_count_action_returns_only_a_total_without_rows(): void
+    {
+        AccWorker::create(['id' => 2, 'name' => 'Siti', 'status' => 'inactive']);
+
+        $result = $this->dispatcher()->dispatch(
+            ['name' => 'count_workers', 'values' => []],
+            $this->admin,
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertTrue($result['count_only']);
+        $this->assertSame('workers', $result['entity']);
+        $this->assertSame(2, $result['total']);
+        // No rows: the app shows a number, never a table.
+        $this->assertArrayNotHasKey('rows', $result);
+        $this->assertArrayNotHasKey('preview', $result, 'a count runs immediately, never previews');
+    }
+
+    public function test_count_action_honors_filters(): void
+    {
+        AccWorker::create(['id' => 2, 'name' => 'Siti', 'status' => 'inactive']);
+
+        $result = $this->dispatcher()->dispatch(
+            ['name' => 'count_workers', 'values' => ['status' => 'inactive']],
+            $this->admin,
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame(1, $result['total']);
+    }
+
+    public function test_read_action_forwards_fixed_params_to_the_controller(): void
+    {
+        AccWorkerController::$lastPerPage = null;
+
+        $result = $this->dispatcher()->dispatch(
+            // The model never sets per_page; the action's fixed params supply it so
+            // the controller returns a full page (enough rows to fill a table).
+            ['name' => 'list_workers', 'values' => ['per_page' => 3]],
+            $this->admin,
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame(50, AccWorkerController::$lastPerPage, 'config params reach the controller; a non-declared model value cannot override them');
+    }
+
     public function test_undeclared_action_is_refused(): void
     {
         $result = $this->dispatcher()->dispatch(
@@ -220,6 +275,8 @@ class AccWorker extends Model
 
 class AccWorkerController
 {
+    public static ?int $lastPerPage = null;
+
     public function update(Request $request, AccWorker $worker): array
     {
         $data = $request->validate(['status' => 'required|in:active,inactive']);
@@ -231,6 +288,8 @@ class AccWorkerController
 
     public function index(Request $request)
     {
+        self::$lastPerPage = (int) $request->input('per_page', 15);
+
         $query = AccWorker::query();
 
         if ($request->filled('status'))
@@ -240,6 +299,10 @@ class AccWorkerController
 
         $rows = $query->get()->map(fn (AccWorker $w) => ['id' => $w->id, 'name' => $w->name, 'status' => $w->status])->all();
 
-        return response()->json(['status' => 'success', 'data' => $rows, 'meta' => ['total' => count($rows)]]);
+        return response()->json([
+            'status' => 'success',
+            'data' => $rows,
+            'meta' => ['total' => count($rows), 'per_page' => (int) $request->input('per_page', 15)],
+        ]);
     }
 }
