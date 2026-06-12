@@ -308,6 +308,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | View routes (deep-link a record to its page)
+    |--------------------------------------------------------------------------
+    |
+    | A route template per table. When the chatbot lists records, the plugin
+    | attaches a "view_url" to each row so your app's chat UI can make the row
+    | clickable — opening that record's page. Placeholders in {braces} are
+    | filled from the row's own columns; pick the column your route uses (often
+    | the primary key or a uuid). Paths are usually relative to your app.
+    |
+    |   'view_routes' => [
+    |       'workers'  => '/workers/{uuid}',
+    |       'epasses'  => '/epasses/{id}',
+    |   ],
+    |
+    | This is plain config you own — your app, not the AI, decides where a
+    | record opens. Tables without an entry simply get no view_url (no link).
+    |
+    */
+
+    'view_routes' => [
+        // 'workers' => '/workers/{uuid}',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Capabilities (per-role × per-table)
     |--------------------------------------------------------------------------
     |

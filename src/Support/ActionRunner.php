@@ -90,8 +90,45 @@ class ActionRunner
         $limit = $limit > 0 ? min($limit, $max) : $max;
 
         $rows = $query->limit($limit)->get()->map(fn ($r) => (array) $r)->all();
+        $rows = $this->withViewUrls($table, $rows);
 
         return ['ok' => true, 'operation' => 'query', 'table' => $table, 'rows' => $rows, 'count' => count($rows)];
+    }
+
+    /**
+     * Attach a `view_url` to each row from the table's configured route template
+     * (e.g. 'workers' => '/workers/{uuid}'), so the chat UI can deep-link a
+     * record to its own page. Placeholders are filled from the row's own
+     * columns; a row whose template cannot be fully resolved is left untouched.
+     * The template is plain config (not personal data) and is owned by the
+     * client app, so the app — never the model — decides where a record opens.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    protected function withViewUrls(string $table, array $rows): array
+    {
+        $template = (string) (config('helfentalk.view_routes')[$table] ?? '');
+
+        if ($template === '')
+        {
+            return $rows;
+        }
+
+        return array_map(function (array $row) use ($template)
+        {
+            $url = preg_replace_callback('/\{(\w+)\}/', function ($m) use ($row)
+            {
+                return array_key_exists($m[1], $row) ? rawurlencode((string) $row[$m[1]]) : $m[0];
+            }, $template);
+
+            if (! preg_match('/\{\w+\}/', $url))
+            {
+                $row['view_url'] = $url;
+            }
+
+            return $row;
+        }, $rows);
     }
 
     /**

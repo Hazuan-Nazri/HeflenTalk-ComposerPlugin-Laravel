@@ -211,6 +211,32 @@ class ActionRunnerTest extends TestCase
         $this->assertSame(7, (int) $result['created']['user_id'], 'new row should be owned by the actor');
     }
 
+    public function test_query_attaches_view_url_from_route_template(): void
+    {
+        config(['helfentalk.view_routes' => ['workers' => '/workers/{id}']]);
+
+        $result = $this->runner()->execute(
+            ['table' => 'workers', 'operation' => 'query', 'filters' => ['id' => 1]],
+            $this->admin,
+            'all',
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame('/workers/1', $result['rows'][0]['view_url']);
+    }
+
+    public function test_query_has_no_view_url_without_a_route_template(): void
+    {
+        $result = $this->runner()->execute(
+            ['table' => 'workers', 'operation' => 'query', 'filters' => ['id' => 1]],
+            $this->admin,
+            'all',
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertArrayNotHasKey('view_url', $result['rows'][0]);
+    }
+
     public function test_count_respects_scope(): void
     {
         $result = $this->runner()->execute(
