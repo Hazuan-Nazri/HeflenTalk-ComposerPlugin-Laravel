@@ -245,6 +245,61 @@ up Ahmad's id, matches the **"Change a worker's status"** action, shows you a pr
 
 Every run and preview is recorded in the audit log.
 
+### List and count through your controllers (read & count actions)
+
+The actions menu isn't only for writes — point it at your `index`/list methods to let
+the bot **find, list and count** records through your own controller, so your
+company/tenant scopes, soft-deletes, policies and API Resource all apply. These run
+**immediately** (no confirm — they change nothing).
+
+```php
+'actions' => [
+
+    // LIST — shown to the user as an interactive, clickable table.
+    'list_workers' => [
+        'label'      => 'List or search workers (by status, etc.)',
+        'controller' => [\App\Http\Controllers\WorkerController::class, 'index'],
+        'read'       => true,                 // a read action: runs now, returns rows
+        'entity'     => 'workers',            // table label
+        'view_route' => '/workers/{id}',      // each row becomes a deep link
+        'inputs'     => ['status' => 'Optional filter: active / inactive'],
+        'params'     => ['per_page' => 50],   // fixed query params your index() reads
+        'roles'      => ['admin', 'manager'],
+    ],
+
+    // COUNT — answers "how many …?" with just a number (no table).
+    'count_workers' => [
+        'label'      => 'Count workers (returns only the number)',
+        'controller' => [\App\Http\Controllers\WorkerController::class, 'index'],
+        'count'      => true,                  // returns only the total, no rows
+        'entity'     => 'workers',
+        'inputs'     => ['status' => 'Optional filter'],
+        'params'     => ['per_page' => 1],
+        'roles'      => ['admin', 'manager'],
+    ],
+
+],
+```
+
+- **`read` / `count`** — `read` returns the list as a clickable table; `count` returns
+  only the paginator total (your authoritative, already-scoped count — no rows, so the
+  app shows a plain number). Both run immediately and never write.
+- **`view_route`** — a deep-link template; `{placeholders}` are filled from each row's
+  own fields, so clicking a row opens its page in your app.
+- **`inputs`** — OPTIONAL filters your `index()` understands; the bot may omit them to
+  list everything.
+- **`params`** — fixed request params ALWAYS sent to your controller (the bot can't set
+  or override them) — e.g. a larger `per_page` so a list fills a table, or a forced sort.
+
+Your `index()` should return JSON — a paginated API-resource collection
+(`{ "data": [...], "meta": { "total": N } }`) or a bare list. The plugin unwraps the
+envelope, attaches a `view_url` to each row, and surfaces `meta.total` as the count.
+
+> **Reads through your controllers, too.** Because `index` actions already apply your
+> scopes and soft-deletes, you can leave the generic-CRUD `capabilities` empty (`[]`)
+> and route **everything** — reads, counts and writes — through your own controllers.
+> This is the most locked-down setup: the plugin never touches the database directly.
+
 ## Data actions via generic table CRUD (alternative)
 
 If you'd rather not wire controllers, you can instead map models and grant
@@ -275,6 +330,16 @@ say yes.
 `SoftDeletes` is soft-deleted, and any `deleting`/`saving` observers or approval
 workflows you have run normally. If your delete needs approval, the chatbot
 cannot skip it.
+
+**Clickable rows from generic queries.** To turn rows from the generic `query`
+operation into deep links too, add a `view_routes` map — the same per-row `view_url`
+that read actions produce:
+
+```php
+'view_routes' => [
+    'workers' => '/workers/{id}',   // {id} is filled from each row
+],
+```
 
 ## Security
 
